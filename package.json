@@ -2,6 +2,6 @@
   "name": "benkle-attic",
   "version": "1.0.0",
   "dependencies": {
-
+    "mime": "^2.4.0"
   }
 }
