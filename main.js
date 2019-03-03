@@ -4,6 +4,7 @@ const match = require('minimatch');
 const YAML = require('yaml');
 const MarkdownIt = require('markdown-it');
 const markdown = new MarkdownIt();
+const zip = require('./zip');
 
 const either = (a, b) => [null, undefined].includes(a) ? b : a;
 
@@ -126,12 +127,27 @@ const processDir = (fromDir, toDir, baseConfig) => {
             return Promise.all(promises).then(_ => data);
         })
         .then(data => {
-            let promises = [];
-            if (baseConfig.json) {
-                promises.push(toDir.open('index.json').write(JSON.stringify(data)));
+            if (data.zip && data.zip.length) {
+                let zipFile = toDir.open(toDir.name + '.zip');
+                return zip
+                    .it(zipFile.absolutePath, fromDir.absolutePath, data.zip)
+                    .then(_ => {
+                        data.zip = zipFile.name;
+                        return data;
+                    });
+            } else {
+                return data;
             }
-
-            return Promise.all(promises);
+        })
+        .then(data => {
+            if (baseConfig.json) {
+                return toDir
+                    .open('index.json')
+                    .write(JSON.stringify(data))
+                    .then(_ => data);
+            } else {
+                return data;
+            }
         })
     ;
 };

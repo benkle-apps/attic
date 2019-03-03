@@ -33,7 +33,7 @@ class INode {
     }
 
     get absolutePath() {
-        return path.join(...[this.base].concat(this.parents, [this.name]));
+        return path.resolve(path.join(...[this.base].concat(this.parents, [this.name])));
     }
 
     get slug() {
