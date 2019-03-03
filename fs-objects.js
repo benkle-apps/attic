@@ -150,5 +150,6 @@ class Directory extends INode {
     }
 }
 
+exports.INode = INode;
 exports.Directory = Directory;
 exports.File = File;

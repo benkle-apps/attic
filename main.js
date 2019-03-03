@@ -1,25 +1,154 @@
 const fso = require('./fs-objects');
 const path = require('path');
+const match = require('minimatch');
+const YAML = require('yaml');
+const MarkdownIt = require('markdown-it');
+const markdown = new MarkdownIt();
 
-const processDir = (fromDir, toDir) => {
-    fromDir.list()
-        .then(items => {
-            items.forEach(item => {
-                if (item instanceof fso.Directory) {
-                    toDir.mkdir(item.slug).then(toDir => processDir(item, toDir));
-                } else {
-                    toDir.open(item.slug).linkTo(item);
+const either = (a, b) => [null, undefined].includes(a) ? b : a;
+
+const expandGlobList = (base, addition) =>
+    base
+        .concat(either(addition, []))
+        .filter(item => item instanceof String || typeof item === 'string')
+    ;
+
+const extendConfig = (dir, options) => {
+    return new Promise((resolve, reject) => {
+        dir
+            .open('directory.yaml')
+            .read(content => YAML.parse(content).options)
+            .then(directoryOptions => {
+                options.index = either(directoryOptions.index, options.index);
+                options.icon = either(directoryOptions.icon, options.icon);
+                if (directoryOptions.zip) {
+                    options.zip.enabled = either(directoryOptions.zip.enabled, options.zip.enabled);
+                    options.zip.exclude = expandGlobList(options.zip.exclude, directoryOptions.zip.exclude);
+                    options.zip.include = expandGlobList(options.zip.include, directoryOptions.zip.include);
                 }
+                if (directoryOptions.listing) {
+                    options.listing.exclude = expandGlobList(options.listing.exclude, directoryOptions.listing.exclude);
+                    options.listing.include = expandGlobList(options.listing.include, directoryOptions.listing.include);
+                }
+                options.static = expandGlobList(options.static, directoryOptions.static);
+                resolve(options);
+            })
+            .catch(e => {
+                console.log(e);
+                resolve(options);
             });
-        });
+    });
 };
 
-[from, to] = process.argv.slice(2, 4);
+const processDir = (fromDir, toDir, baseConfig) => {
+    let options = JSON.parse(JSON.stringify(baseConfig.options));
+    extendConfig(fromDir, options)
+        .then(options => Promise.all([Promise.resolve(options), fromDir.list()]))
+        .then(result => {
+            [options, items] = result;
+            let data = {
+                'site-name': baseConfig.name,
+                name: fromDir.name,
+                parents: fromDir.parents.map(parent => {
+                    parent = new fso.INode('', [], parent ? parent : baseConfig.root);
+                    return {
+                        display: parent.name,
+                        slug: parent.slug
+                    };
+                }),
+                directories: [],
+                files: [],
+                listed: [],
+                zip: options.zip.enabled ? [] : false,
+                text: ''
+            };
+            let promises = items.map(item => {
+                let promises = [];
+                if (item instanceof fso.Directory) {
+                    promises.push(toDir
+                        .mkdir(item.slug)
+                        .then(dir => {
+                            data.directories.push({
+                                display: item.name,
+                                slug: dir.name,
+                                icon: baseConfig.options.icon
+                            });
+                            return dir;
+                        })
+                        .then(dir => processDir(item, dir, baseConfig))
+                    );
+                } else {
+                    const vote = (name, globs) => {
+                        globs = globs.map(glob => match(name, glob));
+                        globs = globs.reduce((a, c) => a || c, false);
+                        return globs;
+                    };
 
-fromDir = new fso.Directory(path.join(process.cwd(), from), [], '');
-toDir = new fso.Directory(path.join(process.cwd(), to), [], '');
-toDir
-    .mkdir()
-    .then(outputDir => outputDir.clear())
-    .then(outputDir => processDir(fromDir, outputDir))
-;
+                    let isStatic = vote(item.name, options.static);
+
+                    let isListingIncluded = vote(item.name, options.listing.include);
+                    let isListingExcluded = vote(item.name, options.listing.exclude);
+                    let isListed = isListingIncluded || !isListingExcluded;
+
+                    let isZipIncluded = vote(item.name, options.zip.include);
+                    let isZipExcluded = vote(item.name, options.zip.exclude);
+
+                    if (options.zip.enabled && (isZipIncluded || (isListed && !isZipExcluded))) {
+                        data.zip.push(item.name);
+                    }
+
+                    if (isStatic || isListed) {
+                        promises.push(toDir
+                            .open(item.slug)
+                            .linkTo(item)
+                            .then(link => {
+                                let templateData = {
+                                    display: item.name,
+                                    slug: link.name,
+                                    type: item.mime
+                                };
+                                data.files.push(templateData);
+                                if (isListed) {
+                                    data.listed.push(templateData);
+                                }
+                            })
+                        );
+                    } else {
+                        promises.push(Promise.resolve());
+                    }
+
+                    if (item.name === options.index) {
+                        promises.push(item.read().then(text => data.text = markdown.render(text)));
+                    }
+                }
+                return Promise.all(promises);
+            });
+            return Promise.all(promises).then(_ => data);
+        })
+        .then(data => {
+            let promises = [];
+            if (baseConfig.json) {
+                promises.push(toDir.open('index.json').write(JSON.stringify(data)));
+            }
+
+            return Promise.all(promises);
+        })
+    ;
+};
+
+process.argv.slice(2).forEach(function(configFile) {
+    let absConfigFile = path.parse(path.resolve(configFile));
+
+    new fso.File(absConfigFile.dir, [], absConfigFile.base)
+        .reStat()
+        .then(cfgFile => cfgFile.read(content => YAML.parse(content)))
+        .then(config => {
+            let fromDir = new fso.Directory(path.join(absConfigFile.dir, config.project.input), [], '');
+            let toDir = new fso.Directory(path.join(absConfigFile.dir, config.project.output), [], '');
+            toDir
+                .mkdir()
+                .then(outputDir => outputDir.clear())
+                .then(outputDir => processDir(fromDir, outputDir, config.project))
+        })
+    ;
+});
