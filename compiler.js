@@ -50,11 +50,12 @@ const processDir = (fromDir, toDir, baseConfig) => {
                     name: baseConfig.name,
                 },
                 name: fromDir.name,
-                parents: fromDir.parents.map(parent => {
-                    parent = new fso.INode('', [], parent ? parent : baseConfig.root);
+                parents: fromDir.parents.map((parent, index, parents) => {
+                    let name = parent ? parent : baseConfig.root;
+                    let dots = new Array(parents.length - index);
                     return {
-                        display: parent.name,
-                        slug: parent.slug,
+                        display: name,
+                        slug: dots.fill('..').join('/'),
                     };
                 }),
                 directories: [],
