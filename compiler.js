@@ -120,7 +120,7 @@ const processDir = (fromDir, toDir, baseConfig) => {
                     }
 
                     if (item.name === options.index) {
-                        promises.push(item.read().then(text => data.text = text));
+                        promises.push(item.read().then(text => data.text = baseConfig.compilers.text(text)));
                     }
                 }
                 return Promise.all(promises);
@@ -153,7 +153,7 @@ const processDir = (fromDir, toDir, baseConfig) => {
         .then(data => {
             return toDir
                 .open('index.html')
-                .write(baseConfig.template.render(data));
+                .write(baseConfig.compilers.template.render(data));
         });
     ;
 };
@@ -165,8 +165,18 @@ process.argv.slice(2).forEach(function(configFile) {
         .reStat()
         .then(cfgFile => cfgFile.read(content => YAML.parse(content)))
         .then(config => {
-            let adapter = require(config.project.template.adapter);
-            config.project.template = adapter.create(absConfigFile.dir, config.project.template.options);
+            let compilers = config.project.compilers;
+
+            let adapter = require(compilers.template.adapter);
+            compilers.template = adapter.create(absConfigFile.dir, compilers.template.options);
+
+            if (compilers.text) {
+                adapter = require(compilers.text.adapter);
+                compilers.text = adapter.create(absConfigFile.dir, compilers.text.options);
+            } else {
+                compilers.text = text => text;
+            }
+
             let fromDir = new fso.Directory(path.join(absConfigFile.dir, config.project.input), [], '');
             let toDir = new fso.Directory(path.join(absConfigFile.dir, config.project.output), [], '');
             toDir
