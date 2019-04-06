@@ -120,7 +120,7 @@ const processDir = (fromDir, toDir, baseConfig) => {
                     }
 
                     if (item.name === options.index) {
-                        promises.push(item.read().then(text => data.text = baseConfig.compilers.text(text)));
+                        promises.push(item.read().then(text => data.text = baseConfig.compilers.text.render(text)));
                     }
                 }
                 return Promise.all(promises);
