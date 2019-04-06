@@ -2,8 +2,6 @@ const fso = require('./fs-objects');
 const path = require('path');
 const match = require('minimatch');
 const YAML = require('yaml');
-const MarkdownIt = require('markdown-it');
-const markdown = new MarkdownIt();
 const zip = require('./zip');
 
 const either = (a, b) => [null, undefined].includes(a) ? b : a;
@@ -119,7 +117,7 @@ const processDir = (fromDir, toDir, baseConfig) => {
                     }
 
                     if (item.name === options.index) {
-                        promises.push(item.read().then(text => data.text = markdown.render(text)));
+                        promises.push(item.read().then(text => data.text));
                     }
                 }
                 return Promise.all(promises);
@@ -149,6 +147,11 @@ const processDir = (fromDir, toDir, baseConfig) => {
                 return data;
             }
         })
+        .then(data => {
+            return toDir
+                .open('index.html')
+                .write(baseConfig.template.render(data));
+        });
     ;
 };
 
@@ -159,6 +162,8 @@ process.argv.slice(2).forEach(function(configFile) {
         .reStat()
         .then(cfgFile => cfgFile.read(content => YAML.parse(content)))
         .then(config => {
+            let adapter = require(config.project.template.adapter);
+            config.project.template = adapter.create(config.project.template.options);
             let fromDir = new fso.Directory(path.join(absConfigFile.dir, config.project.input), [], '');
             let toDir = new fso.Directory(path.join(absConfigFile.dir, config.project.output), [], '');
             toDir
