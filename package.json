@@ -10,5 +10,8 @@
   },
   "bin": {
     "attic": "compiler.js"
-  }
+  },
+  "keywords": ["attic", "site generator", "generator"],
+  "author": "Benjamin Kleiner",
+  "license": "MIT"
 }
