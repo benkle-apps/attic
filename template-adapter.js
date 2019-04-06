@@ -1,15 +1,16 @@
 class Adapter {
-    constructor(options) {
+    constructor(directory, options) {
         this.options = options;
+        this.directory = directory;
     }
 
     render(vars) {
-        return 'TEST CLASS';
+        return '';
     }
 }
 
 exports.Adapter = Adapter;
 
-exports.create = function(options) {
-    return new Adapter(options);
+exports.create = function(directory, options) {
+    return new Adapter(directory, options);
 };
