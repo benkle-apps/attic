@@ -46,20 +46,22 @@ const processDir = (fromDir, toDir, baseConfig) => {
         .then(result => {
             [options, items] = result;
             let data = {
-                'site-name': baseConfig.name,
+                site: {
+                    name: baseConfig.name,
+                },
                 name: fromDir.name,
                 parents: fromDir.parents.map(parent => {
                     parent = new fso.INode('', [], parent ? parent : baseConfig.root);
                     return {
                         display: parent.name,
-                        slug: parent.slug
+                        slug: parent.slug,
                     };
                 }),
                 directories: [],
                 files: [],
                 listed: [],
                 zip: options.zip.enabled ? [] : false,
-                text: ''
+                text: '',
             };
             let promises = items.map(item => {
                 let promises = [];
@@ -70,7 +72,7 @@ const processDir = (fromDir, toDir, baseConfig) => {
                             data.directories.push({
                                 display: item.name,
                                 slug: dir.name,
-                                icon: baseConfig.options.icon
+                                icon: baseConfig.options.icon,
                             });
                             return dir;
                         })
@@ -104,7 +106,7 @@ const processDir = (fromDir, toDir, baseConfig) => {
                                 let templateData = {
                                     display: item.name,
                                     slug: link.name,
-                                    type: item.mime
+                                    type: item.mime,
                                 };
                                 data.files.push(templateData);
                                 if (isListed) {
@@ -117,7 +119,7 @@ const processDir = (fromDir, toDir, baseConfig) => {
                     }
 
                     if (item.name === options.index) {
-                        promises.push(item.read().then(text => data.text));
+                        promises.push(item.read().then(text => data.text = text));
                     }
                 }
                 return Promise.all(promises);
